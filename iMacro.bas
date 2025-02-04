@@ -1,6 +1,6 @@
-Attribute VB_Name = "iMacro"
+Attribute VB_Name = "iFunction"
 ''''''''''''''''''''''''''''''''''''''
-'���������� �������: @elec2105
+'Разработка макроса: @elec2105
 ''''''''''''''''''''''''''''''''''''''
 
 
@@ -8,103 +8,84 @@ Attribute VB_Name = "iMacro"
 Option Explicit
 Option Private Module
 
-Public AppWord As Word.Application, iWord As Word.Document
 
-
-
-Sub CreateDoc()
-Dim MyArray(), BasePath As String, iFolder As String, iTemplate As String
-Dim tmpArray, tmpSTR As String, iRow As Long, iColl As Long, i As Long, j As Long, q As Long
-Dim iExcel As Object
-Dim ID As String, TextToReplace As String, Text As String
-Dim Mark As String, MaxLen As Long
-
-Application.ScreenUpdating = 0
-On Error GoTo iEnd
-
-iFolder = Range("FILE_WORD").Value: If Right(iFolder, 1) <> "\" Then iFolder = iFolder & "\"
-iTemplate = Range("FILE_TEMPLATE").Value: If Right(iTemplate, 1) = ";" Then iTemplate = Left(iTemplate, Len(iTemplate) - 1)
-BasePath = ThisWorkbook.Path & "\Result\": ' Call FolderCreateDel(BasePath)
-
-With Sheets("data")
-    iRow = .UsedRange.Row + .UsedRange.Rows.Count - 1: iColl = .UsedRange.Column + .UsedRange.Columns.Count - 1
-    MyArray = .Range(.Cells(1, 1), .Cells(iRow, iColl)).Value
-End With
-
-'������� ������� ������ Word
-Set AppWord = CreateObject("Word.Application"): AppWord.Visible = False
-
-'���������� ������
-For i = 2 To iRow
-    If MyArray(i, 1) = "ok" Then
+Function ExportWord(ByVal iName As String, ByVal iVal As String) As Boolean
+    Dim i As Long
     
-        '���������� ��������� word-�������
-        tmpArray = Split(MyArray(i, 3), ";")
-        For q = 0 To UBound(tmpArray)
-            tmpSTR = iFolder & tmpArray(q) & ".docx"
-            If Len(Dir(tmpSTR)) > 0 Then
-                Set iWord = AppWord.Documents.Open(tmpSTR, ReadOnly:=True)
-                '������ ������ ����������
-                For j = 4 To iColl
-                    Call ExportWord(MyArray(1, j), MyArray(i, j))
-                Next j
-                
-                iWord.SaveAs Filename:=BasePath & MyArray(i, 2) & " - " & tmpArray(q) & ".docx", FileFormat:=wdFormatXMLDocument
-                iWord.Close False: Set iWord = Nothing
+    'осуществляем замену текста в основной документе
+metka1:
+    With iWord.Content.Find                'With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        '.Replacement.Style = ActiveDocument.Styles("Заголовок 2 Знак")  'Возвращает или устанавливает стиль объекта.
+        .Text = iName
+             If Len(iVal) > 255 Then 'поскольку Find.ReplaceText не может принимать строку больше 255 символов, ' пришлось в "цикле" подставлять строку по кусочкам, каждый раз добавляя в нее iName, ' чтобы в дальнейшем не потерять место, куда вставляем "хвостик" длинной строки
+            .Replacement.Text = Left(iVal, 255 - Len(iName)) & iName
+            iVal = Right(iVal, Len(iVal) - (255 - Len(iName)))
+            .Forward = True
+            .Wrap = 1
+            .Format = False
+            .MatchCase = False
+            .MatchWholeWord = False
+            .MatchWildcards = False
+            .MatchSoundsLike = False
+            .MatchAllWordForms = False
+            .Execute Replace:=2
+            GoTo metka1
+             Else
+            .Replacement.Text = iVal 'текст на который меняем
+             End If
+        .Forward = True
+        .Wrap = 1
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+        .Execute Replace:=2
+    End With
+    'осуществляем замену текста в колонтитулах
+    For i = 6 To 11
+        On Error Resume Next
+        With iWord.StoryRanges.Item(i).Find
+            .ClearFormatting
+            .Replacement.ClearFormatting
+            '.Replacement.Style = ActiveDocument.Styles("Заголовок 2 Знак")  'Возвращает или устанавливает стиль объекта.
+            .Text = iName
+            .Replacement.Text = iVal
+            .Forward = True                     'True, если задано направление поиска "Вперёд". False - в противном случае ("Назад").
+            .Wrap = 1                           'Возвращает или устанавливает константу перечисления WdFindWrap. wdFindContinue = 1
+            .Format = False                     'True если в операцию поиска включено форматирование, False - в противном случае.
+            .MatchCase = True                   'True, если в процессе поиска следует различать регистр символов.
+            .MatchWholeWord = True              'True, если в процессе поиска следует искать заданный текст как отдельное слово, а не как часть другого слова.
+            .MatchAllWordForms = False          'True, если требуется найти все словоформы для заданного слова.
+            .MatchSoundsLike = False            'True, если требуется найти слова похожие по звучанию на заданный текст.
+            .MatchWildcards = False             'True, если в процессе поиска используются регулярные выражения.
+            
+            'MatchByte                          'True, если в процессе поиска следует различать символы полной и половинной ширины.
+            'ParagraphFormat                    'Возвращает или устанавливает объект ParagraphFormat.
+            'Found                              'True, если в результате выполнения поиска было найдено соответствие.
+            'Font                               'Возвращает или устанавливает объект Font задающий форматирование шрифта.
+            
+            '.Execute Replace:=wdReplaceAll
+            .Execute
+            
+            If .Found Then  'проверяем, найдена ли Закладка в документе Word
+                ExportWord = True           'закладка найдена
+                .Execute Replace:=2         'wdReplaceAll = 2
+            Else
+                ExportWord = False          'закладка НЕ найдена
             End If
-        '���������� ��������� excel-�������
-            tmpSTR = iFolder & tmpArray(q) & ".xlsx"
-                If Len(Dir(tmpSTR)) > 0 Then
-                    MaxLen = 200
-                    ' Choose a character for Mark that is not in your data,
-                    '  and is not a special char: ~?*
-                    Mark = "^"
-                    Set iExcel = Workbooks.Open(tmpSTR)
-                    '������ ������ ����������
-                     For j = 4 To iColl
-                        'iExcel.Sheets(1).Cells.Replace MyArray(1, j), MyArray(i, j)
-                        'Call ReplaceText(MyArray(1, j), MyArray(i, j))
-                            ID = MyArray(1, j)
-                            TextToReplace = MyArray(i, j)
-                            If ID <> vbNullString Then
-                                 Do
-                                  Text = Left$(TextToReplace, MaxLen) & Mark
-                                 ' Terminate the loop when all of TextToReplace has been processed
-                                  If Text = Mark Then Text = vbNullString
-                                     TextToReplace = Mid$(TextToReplace, MaxLen + 1)
-                                     iExcel.Sheets(1).Cells.Replace _
-                                     What:=ID, _
-                                     Replacement:=Text, _
-                                     LookAt:=xlPart, _
-                                     SearchOrder:=xlByRows, _
-                                     MatchCase:=False, _
-                                     SearchFormat:=False, _
-                                     ReplaceFormat:=False
-                                     ID = Mark
-                                     Loop Until Text = vbNullString
-                                 End If
-                    Next j
-                    
-                    iExcel.SaveAs Filename:=BasePath & MyArray(i, 2) & " - " & tmpArray(q) & ".xlsx" '".docx" ', FileFormat:=wdFormatXMLDocument
-                    iExcel.Close False: Set iExcel = Nothing
-                End If
-        Next q
-        'Erase tmpArray
-    End If
-Next i
+       End With
+       If Err.Number <> 0 Then Err.Clear
+    Next i
+End Function
 
-AppWord.Quit: Set AppWord = Nothing
-'Erase MyArray: BasePath = "": iFolder = "": iTemplate = ""
 
-Application.ScreenUpdating = 1
-MsgBox "����� ������������.", vbInformation
-
-Exit Sub
-
-iEnd:
-    AppWord.Quit: Set AppWord = Nothing
-    'Erase MyArray: BasePath = "": iFolder = "": iTemplate = ""
-    Application.ScreenUpdating = 1
-    MsgBox "��� ��������� ������ �������� ������.", vbCritical
+Sub FolderCreateDel(ByVal iPath As String)
+    Dim BasePath As String
+    On Error Resume Next
+    Kill iPath & "*.docx"
+    MkDir (iPath)
 End Sub
-
